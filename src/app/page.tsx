@@ -8,7 +8,6 @@ type Booking = {
   email: string;
   checkIn: string;
   checkOut: string;
-  guests: number;
   notes: string;
 };
 
@@ -31,10 +30,19 @@ export default function Home() {
     email: "",
     checkIn: "",
     checkOut: "",
-    guests: 1,
     notes: "",
   });
   const [message, setMessage] = useState("");
+
+  const [modalDate, setModalDate] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    guestName: "",
+    email: "",
+    checkIn: "",
+    checkOut: "",
+    notes: "",
+  });
 
   useEffect(() => {
     const raw = localStorage.getItem("vera_house_bookings");
@@ -64,10 +72,12 @@ export default function Home() {
     return out;
   }, [month]);
 
-  const sorted = useMemo(
-    () => [...bookings].sort((a, b) => a.checkIn.localeCompare(b.checkIn)),
-    [bookings]
-  );
+  const sorted = useMemo(() => [...bookings].sort((a, b) => a.checkIn.localeCompare(b.checkIn)), [bookings]);
+
+  const modalBookings = useMemo(() => {
+    if (!modalDate) return [];
+    return sorted.filter((b) => inRange(modalDate, b.checkIn, b.checkOut));
+  }, [modalDate, sorted]);
 
   function createBooking(e: React.FormEvent) {
     e.preventDefault();
@@ -91,12 +101,60 @@ export default function Home() {
       email: form.email,
       checkIn: form.checkIn,
       checkOut: form.checkOut,
-      guests: form.guests,
       notes: form.notes,
     };
     setBookings((prev) => [entry, ...prev]);
-    setForm({ guestName: "", email: "", checkIn: "", checkOut: "", guests: 1, notes: "" });
+    setForm({ guestName: "", email: "", checkIn: "", checkOut: "", notes: "" });
     setMessage("Reserva creada correctamente ✅");
+  }
+
+  function startEdit(b: Booking) {
+    setEditingId(b.id);
+    setEditForm({
+      guestName: b.guestName,
+      email: b.email,
+      checkIn: b.checkIn,
+      checkOut: b.checkOut,
+      notes: b.notes || "",
+    });
+  }
+
+  function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingId) return;
+    if (!editForm.guestName || !editForm.email || !editForm.checkIn || !editForm.checkOut) {
+      return;
+    }
+    if (editForm.checkOut <= editForm.checkIn) {
+      return;
+    }
+    const overlap = bookings.some(
+      (b) => b.id !== editingId && editForm.checkIn < b.checkOut && editForm.checkOut > b.checkIn
+    );
+    if (overlap) {
+      return;
+    }
+
+    setBookings((prev) =>
+      prev.map((b) =>
+        b.id === editingId
+          ? {
+              ...b,
+              guestName: editForm.guestName,
+              email: editForm.email,
+              checkIn: editForm.checkIn,
+              checkOut: editForm.checkOut,
+              notes: editForm.notes,
+            }
+          : b
+      )
+    );
+    setEditingId(null);
+  }
+
+  function removeBooking(id: string) {
+    setBookings((prev) => prev.filter((b) => b.id !== id));
+    if (editingId === id) setEditingId(null);
   }
 
   return (
@@ -125,8 +183,14 @@ export default function Home() {
                 const key = ymd(d);
                 const inCurrent = d.getMonth() === month.getMonth();
                 const reserved = bookings.filter((b) => inRange(key, b.checkIn, b.checkOut));
+                const clickable = reserved.length > 0;
                 return (
-                  <div key={key} className={`rounded-xl border p-2 min-h-24 ${inCurrent ? "border-zinc-700 bg-zinc-900" : "border-zinc-800 bg-zinc-950 text-zinc-600"}`}>
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => clickable && (setModalDate(key), setEditingId(null))}
+                    className={`rounded-xl border p-2 min-h-24 text-left ${inCurrent ? "border-zinc-700 bg-zinc-900" : "border-zinc-800 bg-zinc-950 text-zinc-600"} ${clickable ? "cursor-pointer hover:border-indigo-500" : "cursor-default"}`}
+                  >
                     <div className="text-sm mb-1">{d.getDate()}</div>
                     <div className="space-y-1">
                       {reserved.slice(0, 2).map((r) => (
@@ -134,7 +198,7 @@ export default function Home() {
                       ))}
                       {reserved.length > 2 && <div className="text-[11px] text-zinc-400">+{reserved.length - 2} más</div>}
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -148,7 +212,7 @@ export default function Home() {
               <input className="rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2" type="date" value={form.checkIn} onChange={(e) => setForm({ ...form, checkIn: e.target.value })} />
               <input className="rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2" type="date" value={form.checkOut} onChange={(e) => setForm({ ...form, checkOut: e.target.value })} />
             </div>
-            <input className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2" type="number" min={1} max={20} value={form.guests} onChange={(e) => setForm({ ...form, guests: Number(e.target.value) })} />
+
             <textarea className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 min-h-20" placeholder="Notas" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             <button className="w-full rounded-lg bg-indigo-600 hover:bg-indigo-500 py-2 font-medium">Guardar reserva</button>
             {message && <p className="text-sm text-zinc-300">{message}</p>}
@@ -165,7 +229,7 @@ export default function Home() {
                 <div key={b.id} className="rounded-xl border border-zinc-700 p-3 flex flex-wrap justify-between gap-2">
                   <div>
                     <p className="font-medium">{b.guestName}</p>
-                    <p className="text-sm text-zinc-400">{b.email} · {b.guests} huésped(es)</p>
+                    <p className="text-sm text-zinc-400">{b.email} · 1 huésped</p>
                   </div>
                   <p className="text-sm text-zinc-300">{b.checkIn} → {b.checkOut}</p>
                 </div>
@@ -174,6 +238,54 @@ export default function Home() {
           </div>
         </section>
       </div>
+
+      {modalDate && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-zinc-700 bg-zinc-900 p-4 space-y-4 max-h-[90vh] overflow-auto">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Reservas del día {modalDate}</h3>
+              <button className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700" onClick={() => { setModalDate(null); setEditingId(null); }}>Cerrar</button>
+            </div>
+
+            {modalBookings.length === 0 ? (
+              <p className="text-zinc-400">No hay reservas activas este día.</p>
+            ) : (
+              <div className="space-y-3">
+                {modalBookings.map((b) => (
+                  <div key={b.id} className="rounded-xl border border-zinc-700 p-3 space-y-2">
+                    {editingId === b.id ? (
+                      <form onSubmit={saveEdit} className="space-y-2">
+                        <input className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2" value={editForm.guestName} onChange={(e) => setEditForm({ ...editForm, guestName: e.target.value })} />
+                        <input className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2" type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+                        <div className="grid grid-cols-2 gap-2">
+                          <input className="rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2" type="date" value={editForm.checkIn} onChange={(e) => setEditForm({ ...editForm, checkIn: e.target.value })} />
+                          <input className="rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2" type="date" value={editForm.checkOut} onChange={(e) => setEditForm({ ...editForm, checkOut: e.target.value })} />
+                        </div>
+                        <textarea className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 min-h-20" value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} />
+                        <div className="flex gap-2 justify-end">
+                          <button type="button" className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700" onClick={() => setEditingId(null)}>Cancelar</button>
+                          <button className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500">Guardar cambios</button>
+                        </div>
+                      </form>
+                    ) : (
+                      <>
+                        <p className="font-medium">{b.guestName}</p>
+                        <p className="text-sm text-zinc-400">{b.email}</p>
+                        <p className="text-sm text-zinc-300">{b.checkIn} → {b.checkOut}</p>
+                        {b.notes && <p className="text-sm text-zinc-400">{b.notes}</p>}
+                        <div className="flex gap-2 justify-end">
+                          <button className="px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-500" onClick={() => startEdit(b)}>Editar</button>
+                          <button className="px-3 py-2 rounded-lg bg-rose-700 hover:bg-rose-600" onClick={() => removeBooking(b.id)}>Borrar</button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
