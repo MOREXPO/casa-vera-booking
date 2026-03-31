@@ -9,6 +9,7 @@ type Booking = {
   checkIn: string;
   checkOut: string;
   notes: string;
+  rating?: number;
 };
 
 function ymd(d: Date) {
@@ -22,6 +23,11 @@ function inRange(day: string, start: string, end: string) {
   return day >= start && day < end;
 }
 
+function renderStars(rating?: number) {
+  const value = Math.max(1, Math.min(5, Number(rating || 5)));
+  return "★".repeat(value) + "☆".repeat(5 - value);
+}
+
 export default function Home() {
   const [month, setMonth] = useState(new Date());
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -31,6 +37,7 @@ export default function Home() {
     checkIn: "",
     checkOut: "",
     notes: "",
+    rating: 5,
   });
   const [message, setMessage] = useState("");
 
@@ -42,6 +49,7 @@ export default function Home() {
     checkIn: "",
     checkOut: "",
     notes: "",
+    rating: 5,
   });
 
   async function loadBookings() {
@@ -104,7 +112,7 @@ export default function Home() {
     }
 
     await loadBookings();
-    setForm({ guestName: "", email: "", checkIn: "", checkOut: "", notes: "" });
+    setForm({ guestName: "", email: "", checkIn: "", checkOut: "", notes: "", rating: 5 });
     setMessage("Reserva creada correctamente ✅");
   }
 
@@ -116,6 +124,7 @@ export default function Home() {
       checkIn: b.checkIn,
       checkOut: b.checkOut,
       notes: b.notes || "",
+      rating: b.rating || 5,
     });
   }
 
@@ -193,6 +202,9 @@ export default function Home() {
               <input className="rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2" type="date" value={form.checkIn} onChange={(e) => setForm({ ...form, checkIn: e.target.value })} />
               <input className="rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2" type="date" value={form.checkOut} onChange={(e) => setForm({ ...form, checkOut: e.target.value })} />
             </div>
+            <select className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2" value={form.rating} onChange={(e) => setForm({ ...form, rating: Number(e.target.value) })}>
+              {[5,4,3,2,1].map((n) => <option key={n} value={n}>{renderStars(n)} ({n}/5)</option>)}
+            </select>
 
             <textarea className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 min-h-20" placeholder="Notas" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             <button className="w-full rounded-lg bg-indigo-600 hover:bg-indigo-500 py-2 font-medium">Guardar reserva</button>
@@ -211,6 +223,7 @@ export default function Home() {
                   <div>
                     <p className="font-medium">{b.guestName}</p>
                     <p className="text-sm text-zinc-400">{b.email} · 1 huésped</p>
+                    <p className="text-sm text-amber-300">{renderStars(b.rating)}</p>
                   </div>
                   <p className="text-sm text-zinc-300">{b.checkIn} → {b.checkOut}</p>
                 </div>
@@ -242,6 +255,9 @@ export default function Home() {
                           <input className="rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2" type="date" value={editForm.checkIn} onChange={(e) => setEditForm({ ...editForm, checkIn: e.target.value })} />
                           <input className="rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2" type="date" value={editForm.checkOut} onChange={(e) => setEditForm({ ...editForm, checkOut: e.target.value })} />
                         </div>
+                        <select className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2" value={editForm.rating} onChange={(e) => setEditForm({ ...editForm, rating: Number(e.target.value) })}>
+                          {[5,4,3,2,1].map((n) => <option key={n} value={n}>{renderStars(n)} ({n}/5)</option>)}
+                        </select>
                         <textarea className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 min-h-20" value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} />
                         <div className="flex gap-2 justify-end">
                           <button type="button" className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700" onClick={() => setEditingId(null)}>Cancelar</button>
@@ -252,6 +268,7 @@ export default function Home() {
                       <>
                         <p className="font-medium">{b.guestName}</p>
                         <p className="text-sm text-zinc-400">{b.email}</p>
+                        <p className="text-sm text-amber-300">{renderStars(b.rating)}</p>
                         <p className="text-sm text-zinc-300">{b.checkIn} → {b.checkOut}</p>
                         {b.notes && <p className="text-sm text-zinc-400">{b.notes}</p>}
                         <div className="flex gap-2 justify-end">

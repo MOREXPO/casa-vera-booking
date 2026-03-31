@@ -11,6 +11,7 @@ type Booking = {
   checkIn: string;
   checkOut: string;
   notes: string;
+  rating: number;
 };
 
 async function readBookings(): Promise<Booking[]> {
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
   const body = await request.json();
   const bookings = await readBookings();
 
+  const rating = Math.max(1, Math.min(5, Number(body.rating || 5)));
   const entry: Booking = {
     id: crypto.randomUUID(),
     guestName: String(body.guestName || "").trim(),
@@ -44,6 +46,7 @@ export async function POST(request: Request) {
     checkIn: String(body.checkIn || ""),
     checkOut: String(body.checkOut || ""),
     notes: String(body.notes || "").trim(),
+    rating,
   };
 
   if (!entry.guestName || !entry.email || !entry.checkIn || !entry.checkOut) {
@@ -79,6 +82,7 @@ export async function PATCH(request: Request) {
     checkIn: String(body.checkIn ?? bookings[idx].checkIn),
     checkOut: String(body.checkOut ?? bookings[idx].checkOut),
     notes: String(body.notes ?? bookings[idx].notes).trim(),
+    rating: Math.max(1, Math.min(5, Number(body.rating ?? bookings[idx].rating ?? 5))),
   };
 
   if (!updated.guestName || !updated.email || !updated.checkIn || !updated.checkOut) {
