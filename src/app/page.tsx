@@ -44,14 +44,16 @@ export default function Home() {
     notes: "",
   });
 
-  useEffect(() => {
-    const raw = localStorage.getItem("vera_house_bookings");
-    if (raw) setBookings(JSON.parse(raw));
-  }, []);
+  async function loadBookings() {
+    const r = await fetch("/api/bookings", { cache: "no-store" });
+    if (!r.ok) return;
+    const data = await r.json();
+    setBookings(Array.isArray(data) ? data : []);
+  }
 
   useEffect(() => {
-    localStorage.setItem("vera_house_bookings", JSON.stringify(bookings));
-  }, [bookings]);
+    loadBookings();
+  }, []);
 
   const days = useMemo(() => {
     const start = new Date(month.getFullYear(), month.getMonth(), 1);
@@ -79,7 +81,7 @@ export default function Home() {
     return sorted.filter((b) => inRange(modalDate, b.checkIn, b.checkOut));
   }, [modalDate, sorted]);
 
-  function createBooking(e: React.FormEvent) {
+  async function createBooking(e: React.FormEvent) {
     e.preventDefault();
     setMessage("");
     if (!form.guestName || !form.email || !form.checkIn || !form.checkOut) {
@@ -90,20 +92,18 @@ export default function Home() {
       setMessage("La salida debe ser posterior a la entrada.");
       return;
     }
-    const overlap = bookings.some((b) => form.checkIn < b.checkOut && form.checkOut > b.checkIn);
-    if (overlap) {
-      setMessage("Ese rango ya está reservado.");
+    const r = await fetch("/api/bookings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      setMessage(data?.error || "No se pudo crear la reserva");
       return;
     }
-    const entry: Booking = {
-      id: crypto.randomUUID(),
-      guestName: form.guestName,
-      email: form.email,
-      checkIn: form.checkIn,
-      checkOut: form.checkOut,
-      notes: form.notes,
-    };
-    setBookings((prev) => [entry, ...prev]);
+
+    await loadBookings();
     setForm({ guestName: "", email: "", checkIn: "", checkOut: "", notes: "" });
     setMessage("Reserva creada correctamente ✅");
   }
@@ -119,41 +119,22 @@ export default function Home() {
     });
   }
 
-  function saveEdit(e: React.FormEvent) {
+  async function saveEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editingId) return;
-    if (!editForm.guestName || !editForm.email || !editForm.checkIn || !editForm.checkOut) {
-      return;
-    }
-    if (editForm.checkOut <= editForm.checkIn) {
-      return;
-    }
-    const overlap = bookings.some(
-      (b) => b.id !== editingId && editForm.checkIn < b.checkOut && editForm.checkOut > b.checkIn
-    );
-    if (overlap) {
-      return;
-    }
-
-    setBookings((prev) =>
-      prev.map((b) =>
-        b.id === editingId
-          ? {
-              ...b,
-              guestName: editForm.guestName,
-              email: editForm.email,
-              checkIn: editForm.checkIn,
-              checkOut: editForm.checkOut,
-              notes: editForm.notes,
-            }
-          : b
-      )
-    );
+    const r = await fetch("/api/bookings", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: editingId, ...editForm }),
+    });
+    if (!r.ok) return;
+    await loadBookings();
     setEditingId(null);
   }
 
-  function removeBooking(id: string) {
-    setBookings((prev) => prev.filter((b) => b.id !== id));
+  async function removeBooking(id: string) {
+    await fetch(`/api/bookings?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    await loadBookings();
     if (editingId === id) setEditingId(null);
   }
 
